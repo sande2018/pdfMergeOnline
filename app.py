@@ -10,7 +10,7 @@ UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
 MERGED_FILE_NAME = 'merged_file.pdf'
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 设置最大文件上传大小为16MB
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 设置最大文件上传大小为50MB
 
 def generate_unique_filename():
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
@@ -24,6 +24,10 @@ def merge_pdfs(files):
         merger.append(pdf)
     merged_file_name = generate_unique_filename()
     merged_file_path = os.path.join(app.config['UPLOAD_FOLDER'], merged_file_name)
+    
+    # 确保uploads目录存在
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+    
     print("合并后文件路径:", merged_file_path)  # 打印合并后的文件路径
     with open(merged_file_path, 'wb') as output:
         try:
