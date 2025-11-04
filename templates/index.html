@@ -4,180 +4,371 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF合并工具</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <style>
-        /* 居中显示加载动画 */
-        .loader {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 9999;
-            border: 16px solid #f3f3f3;
-            border-top: 16px solid #3498db;
-            border-radius: 50%;
-            width: 120px;
-            height: 120px;
-            animation: spin 2s linear infinite;
+        @tailwind base;
+        @tailwind components;
+        @tailwind utilities;
+        
+        /* 自定义样式 */
+        .dropzone {
+            transition: all 0.3s ease;
         }
-
+        
+        .dropzone.dragover {
+            @apply border-blue-500 bg-blue-50;
+        }
+        
+        .file-item {
+            transition: all 0.3s ease;
+        }
+        
+        .file-item:hover {
+            @apply bg-gray-50;
+        }
+        
+        .drag-handle {
+            cursor: grab;
+        }
+        
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+        
+        /* 加载动画 */
+        .loader {
+            border-top-color: #3b82f6;
+            animation: spin 1s linear infinite;
+        }
+        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
-        /* 上传区域样式 */
-        #pdfDropArea {
-            border: 2px dashed #ccc;
-            padding: 20px;
-            cursor: pointer;
-            height: 200px; /* 调整上传区域的高度 */
-        }
-
-        /* 上传区域拖拽样式 */
-        #pdfDropArea.dragover {
-            border-color: #007bff;
-        }
-
-        /* 已选文件列表样式 */
-        #selectedFiles {
-            list-style: none;
-            padding-left: 0;
-        }
-
-        /* 已选文件项样式 */
-        .file-item {
-            margin-bottom: 5px;
-        }
     </style>
 </head>
-<body>
-    <div class="container mt-5">
-        <h2 class="mb-4">PDF合并工具</h2>
-        <div id="pdfDropArea" class="mb-3" onclick="document.getElementById('pdfFiles').click();">
-            <p class="text-muted">拖拽或点击此处选择PDF文件</p>
-            <input type="file" id="pdfFiles" name="files[]" multiple style="display: none;" accept=".pdf">
-        </div>
-        <ul id="selectedFiles" class="mt-3"></ul>
-        <button id="mergeButton" type="button" class="btn btn-success mt-3" disabled>合并PDF文件</button>
-        <div id="downloadLink" class="mt-3" style="display: none;">
-            <a id="downloadButton" class="btn btn-success" href="#" download>下载合并后的PDF</a>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-4xl mx-auto">
+            <!-- 标题 -->
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-bold text-gray-800 mb-2">
+                    <i class="fas fa-file-pdf text-red-500 mr-2"></i>
+                    PDF合并工具
+                </h1>
+                <p class="text-gray-600">轻松合并多个PDF文件，支持拖拽上传和排序</p>
+            </div>
+            
+            <!-- 上传区域 -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <div id="pdfDropArea" class="dropzone border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer">
+                    <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
+                    <p class="text-gray-600 mb-2">拖拽PDF文件到此处</p>
+                    <p class="text-sm text-gray-500">或点击选择文件</p>
+                    <input type="file" id="pdfFiles" name="files[]" multiple style="display: none;" accept=".pdf">
+                </div>
+                
+                <!-- 文件列表 -->
+                <div id="fileListContainer" class="mt-6" style="display: none;">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-3 flex items-center">
+                        <i class="fas fa-list mr-2"></i>
+                        已选择文件 (<span id="fileCount">0</span>)
+                    </h2>
+                    <div id="selectedFiles" class="space-y-3 max-h-60 overflow-y-auto"></div>
+                </div>
+                
+                <!-- 合并按钮和进度条 -->
+                <div class="mt-6 flex flex-col gap-4">
+                    <button id="mergeButton" type="button" class="btn btn-primary w-full py-3 px-6 rounded-lg font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-file-merge mr-2"></i>
+                        合并PDF文件
+                    </button>
+                    
+                    <!-- 进度条 -->
+                    <div id="progressContainer" class="hidden">
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                            <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                        <p class="text-sm text-gray-600 text-center" id="progressText">准备合并...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 下载链接 -->
+            <div id="downloadLink" class="bg-white rounded-lg shadow-lg p-6 mb-6 hidden">
+                <h2 class="text-xl font-semibold text-gray-800 mb-3 flex items-center">
+                    <i class="fas fa-download mr-2"></i>
+                    合并完成！
+                </h2>
+                <a id="downloadButton" class="btn btn-success w-full py-3 px-6 rounded-lg font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors flex items-center justify-center">
+                    <i class="fas fa-download mr-2"></i>
+                    下载合并后的PDF
+                </a>
+            </div>
         </div>
     </div>
-
-    <!-- 加载动画 -->
-    <div id="loader" class="loader" style="display: none;"></div>
-
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    
+    <!-- Toast通知 -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300 z-50">
+        <i class="fas fa-check-circle mr-2"></i>
+        <span id="toastMessage">操作成功！</span>
+    </div>
 
     <script>
-        var selectedFiles = []; // 存储已选文件
-
+        const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+        let selectedFiles = [];
+        
+        // 显示Toast通知
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            
+            toastMessage.textContent = message;
+            
+            // 设置不同类型的背景色
+            if (type === 'success') {
+                toast.classList.remove('bg-red-500');
+                toast.classList.add('bg-green-500');
+            } else if (type === 'error') {
+                toast.classList.remove('bg-green-500');
+                toast.classList.add('bg-red-500');
+            }
+            
+            toast.classList.remove('translate-x-full');
+            
+            // 3秒后隐藏
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+            }, 3000);
+        }
+        
         // 显示加载动画
         function showLoader() {
-            $('#loader').show();
+            // 这里可以添加加载动画逻辑
         }
-
+        
         // 隐藏加载动画
         function hideLoader() {
-            $('#loader').hide();
+            // 这里可以添加隐藏加载动画逻辑
         }
-
+        
         // 更新已选文件列表
         function updateSelectedFilesList() {
-            var selectedFilesList = $('#selectedFiles');
-            selectedFilesList.empty();
-            selectedFiles.forEach(function(file, index) {
-                var listItem = $('<li class="file-item">' + file.name + ' (' + formatFileSize(file.size) + ') <button type="button" class="btn btn-sm btn-danger" onclick="removeFile(' + index + ')">删除</button></li>');
-                selectedFilesList.append(listItem);
-            });
+            const selectedFilesList = document.getElementById('selectedFiles');
+            const fileCount = document.getElementById('fileCount');
+            const fileListContainer = document.getElementById('fileListContainer');
+            
+            selectedFilesList.innerHTML = '';
+            fileCount.textContent = selectedFiles.length;
+            
             if (selectedFiles.length > 0) {
-                $('#mergeButton').prop('disabled', false); // 有选中文件时启用合并按钮
+                fileListContainer.style.display = 'block';
+                document.getElementById('mergeButton').disabled = false;
+                
+                selectedFiles.forEach((file, index) => {
+                    const listItem = document.createElement('div');
+                    listItem.className = 'file-item flex items-center justify-between p-3 border border-gray-200 rounded-lg';
+                    
+                    listItem.innerHTML = `
+                        <div class="flex items-center flex-1 min-w-0">
+                            <span class="drag-handle text-gray-400 mr-3 cursor-grab active:cursor-grabbing">
+                                <i class="fas fa-grip-vertical"></i>
+                            </span>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-gray-800 truncate">${file.name}</p>
+                                <p class="text-xs text-gray-500">${formatFileSize(file.size)}</p>
+                            </div>
+                        </div>
+                        <button type="button" class="btn-delete text-red-500 hover:text-red-700 ml-3" onclick="removeFile(${index})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    `;
+                    
+                    selectedFilesList.appendChild(listItem);
+                });
+                
+                // 初始化SortableJS进行拖拽排序
+                new Sortable(selectedFilesList, {
+                    handle: '.drag-handle',
+                    animation: 150,
+                    onEnd: function(evt) {
+                        // 更新selectedFiles数组顺序
+                        const itemEl = evt.item;
+                        const newIndex = evt.newIndex;
+                        const oldIndex = evt.oldIndex;
+                        
+                        if (newIndex !== oldIndex) {
+                            const [movedFile] = selectedFiles.splice(oldIndex, 1);
+                            selectedFiles.splice(newIndex, 0, movedFile);
+                        }
+                    }
+                });
             } else {
-                $('#mergeButton').prop('disabled', true); // 没有选中文件时禁用合并按钮
+                fileListContainer.style.display = 'none';
+                document.getElementById('mergeButton').disabled = true;
             }
         }
-
-        // 格式化文件大小
-        function formatFileSize(size) {
-            if (size === 0) return '0 B';
-            var units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-            var i = Math.floor(Math.log(size) / Math.log(1024));
-            return (size / Math.pow(1024, i)).toFixed(2) + ' ' + units[i];
+        
+        // 格式化为人类可读的文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
-
-        // 处理文件上传和合并
-        function handleUpload() {
-            showLoader(); // 显示加载动画
-            var totalSize = 0;
-            selectedFiles.forEach(function(file) {
-                totalSize += file.size;
-            });
-            // 检查文件总大小是否超过40MB
-            if (totalSize > 40 * 1024 * 1024) {
-                hideLoader(); // 隐藏加载动画
-                alert('所选文件总大小超过40MB，不支持上传。'); // 显示警告信息
-                return;
-            }
-            var formData = new FormData();
-            selectedFiles.forEach(function(file) {
-                formData.append('files[]', file);
-            });
-            $.ajax({
-                url: '/merge',
-                type: 'POST',
-                data: formData,
-                contentType: false,
-                processData: false,
-                success: function(response) {
-                    hideLoader(); // 隐藏加载动画
-                    $('#downloadLink').show();
-                    $('#downloadButton').attr('href', response);
-                },
-                error: function(xhr, status, error) {
-                    hideLoader(); // 隐藏加载动画
-                    alert('发生错误：' + error); // 显示错误信息
-                }
-            });
-        }
-
-        // 移除已选文件
+        
+        // 移除文件
         function removeFile(index) {
             selectedFiles.splice(index, 1);
             updateSelectedFilesList();
+            showToast('文件已删除', 'success');
         }
-
-        // 监听文件拖拽
-        $('#pdfDropArea').on({
-            dragover: function(e) {
-                e.preventDefault();
-                $(this).addClass('dragover');
-            },
-            dragleave: function(e) {
-                e.preventDefault();
-                $(this).removeClass('dragover');
-            },
-            drop: function(e) {
-                e.preventDefault();
-                $(this).removeClass('dragover');
-                var files = e.originalEvent.dataTransfer.files;
-                selectedFiles = selectedFiles.concat(Array.from(files)); // 将新选择的文件追加到已选文件列表中
-                updateSelectedFilesList();
+        
+        // 处理文件选择
+        function handleFileSelect(files) {
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                
+                // 检查文件类型
+                if (file.type !== 'application/pdf') {
+                    showToast(`文件 ${file.name} 不是PDF格式`, 'error');
+                    continue;
+                }
+                
+                // 检查文件大小
+                if (file.size > MAX_FILE_SIZE) {
+                    showToast(`文件 ${file.name} 超过50MB大小限制`, 'error');
+                    continue;
+                }
+                
+                // 检查文件是否已存在
+                const existingFileIndex = selectedFiles.findIndex(f => f.name === file.name && f.size === file.size);
+                if (existingFileIndex !== -1) {
+                    showToast(`文件 ${file.name} 已存在`, 'error');
+                    continue;
+                }
+                
+                selectedFiles.push(file);
             }
-        });
-
-        // 监听文件选择
-        $('#pdfFiles').on('change', function() {
-            var files = this.files;
-            selectedFiles = selectedFiles.concat(Array.from(files)); // 将新选择的文件追加到已选文件列表中
+            
             updateSelectedFilesList();
+            
+            if (files.length > 0) {
+                showToast(`已添加 ${files.length} 个文件`, 'success');
+            }
+        }
+        
+        // 处理拖放事件
+        document.getElementById('pdfDropArea').addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('dragover');
         });
-
-        // 监听合并按钮点击事件
-        $('#mergeButton').on('click', function() {
-            handleUpload();
+        
+        document.getElementById('pdfDropArea').addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            this.classList.remove('dragover');
+        });
+        
+        document.getElementById('pdfDropArea').addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            handleFileSelect(files);
+        });
+        
+        // 处理文件选择框事件
+        document.getElementById('pdfFiles').addEventListener('change', function(e) {
+            const files = this.files;
+            handleFileSelect(files);
+            this.value = ''; // 重置文件选择框
+        });
+        
+        // 处理合并按钮点击
+        document.getElementById('mergeButton').addEventListener('click', function() {
+            if (selectedFiles.length < 2) {
+                showToast('至少需要选择2个PDF文件进行合并', 'error');
+                return;
+            }
+            
+            mergePDFs();
+        });
+        
+        // 合并PDF文件
+        function mergePDFs() {
+            showLoader();
+            
+            // 显示进度条
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            
+            progressContainer.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            progressText.textContent = '准备合并...';
+            
+            // 模拟进度
+            setTimeout(() => {
+                progressBar.style.width = '30%';
+                progressText.textContent = '正在上传文件...';
+            }, 500);
+            
+            // 创建FormData对象
+            const formData = new FormData();
+            selectedFiles.forEach((file, index) => {
+                formData.append('files[]', file, `file_${index}.pdf`);
+            });
+            
+            // 发送合并请求
+            fetch('/merge', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('合并失败');
+                }
+                return response.text();
+            })
+            .then(downloadLink => {
+                setTimeout(() => {
+                    progressBar.style.width = '100%';
+                    progressText.textContent = '合并完成！';
+                    
+                    setTimeout(() => {
+                        hideLoader();
+                        
+                        // 显示下载链接
+                        const downloadLinkDiv = document.getElementById('downloadLink');
+                        const downloadButton = document.getElementById('downloadButton');
+                        
+                        downloadButton.href = downloadLink;
+                        downloadLinkDiv.classList.remove('hidden');
+                        
+                        // 重置上传区域
+                        selectedFiles = [];
+                        updateSelectedFilesList();
+                        
+                        // 隐藏进度条
+                        progressContainer.classList.add('hidden');
+                        
+                        showToast('PDF合并成功！', 'success');
+                    }, 500);
+                }, 1000);
+            })
+            .catch(error => {
+                hideLoader();
+                progressContainer.classList.add('hidden');
+                showToast('合并失败：' + error.message, 'error');
+            });
+        }
+        
+        // 点击上传区域打开文件选择框
+        document.getElementById('pdfDropArea').addEventListener('click', function() {
+            document.getElementById('pdfFiles').click();
         });
     </script>
 </body>
